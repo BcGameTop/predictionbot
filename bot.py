@@ -15,6 +15,7 @@ bot.delete_webhook()
 # User status storage
 PAID_USERS_FILE = "paid_users.json"
 CONNECTED_USERS_FILE = "connected_users.json"
+ALL_USERS_FILE = "all_users.json"  # New file to store all users
 
 # Load user status from files
 try:
@@ -29,12 +30,21 @@ try:
 except (FileNotFoundError, json.JSONDecodeError):
     connected_users = set()
 
+# Load all users from file
+try:
+    with open(ALL_USERS_FILE, "r") as f:
+        all_users = set(json.load(f))
+except (FileNotFoundError, json.JSONDecodeError):
+    all_users = set()
+
 def save_status():
     """Save user status to files"""
     with open(PAID_USERS_FILE, "w") as f:
         json.dump(list(paid_users), f)
     with open(CONNECTED_USERS_FILE, "w") as f:
         json.dump(list(connected_users), f)
+    with open(ALL_USERS_FILE, "w") as f:  # Save all users
+        json.dump(list(all_users), f)
 
 def add_paid_user(user_id):
     """Add a user to the paid users list"""
@@ -100,11 +110,14 @@ def handle_remove_user(message):
             
             removed_from_paid = user_id_to_remove in paid_users
             removed_from_connected = user_id_to_remove in connected_users
+            removed_from_all = user_id_to_remove in all_users
             
             if removed_from_paid:
                 paid_users.remove(user_id_to_remove)
             if removed_from_connected:
                 connected_users.remove(user_id_to_remove)
+            if removed_from_all:
+                all_users.remove(user_id_to_remove)
             
             save_status()
             
@@ -113,8 +126,10 @@ def handle_remove_user(message):
                 status_message += "\n- Paid users list"
             if removed_from_connected:
                 status_message += "\n- Connected users list"
-            if not removed_from_paid and not removed_from_connected:
-                status_message += "\n⚠️ User was not in either list"
+            if removed_from_all:
+                status_message += "\n- All users list"
+            if not removed_from_paid and not removed_from_connected and not removed_from_all:
+                status_message += "\n⚠️ User was not in any list"
                 
             bot.reply_to(message, status_message)
             
@@ -137,7 +152,6 @@ def process_send_all(message):
         return
         
     admin_message = message.text
-    all_users = paid_users.union(connected_users)  # Combine both sets to get all users
     
     if not all_users:
         bot.reply_to(message, "⚠️ No users found in the database.")
@@ -256,6 +270,10 @@ def send_user_message(message, user_id):
 
 @bot.message_handler(commands=['start'])
 def welcome_message(message):
+    # Add user to all_users set when they start the bot
+    all_users.add(message.chat.id)
+    save_status()
+    
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     buttons = [
         types.KeyboardButton("Support 👤"), 
